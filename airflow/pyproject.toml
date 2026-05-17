@@ -1,0 +1,8 @@
+[project]
+name = "airflow-dags"
+version = "0.1.0"
+dependencies = [
+    "apache-airflow-providers-apache-spark==4.11.3",
+    "psycopg2-binary==2.9.9",
+    "toml",
+]

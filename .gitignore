@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+*.egg-info/
+.pytest_cache/
+
+# Node and Bun
+node_modules/
+dist/
+.vite/
+bun.lockb
+
+# Runtime data
+logs/
+data/
+postgres_data/
+minio_data/
+spark/checkpoints/
+spark/warehouse/
+
+# Editors
+.vscode/
+.idea/
+.DS_Store
