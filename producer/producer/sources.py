@@ -174,3 +174,39 @@ async def run_hackernews_source(producer: JsonKafkaProducer, poll_seconds: int) 
             logger.exception("HackerNews polling failed")
 
         await asyncio.sleep(poll_seconds)
+
+
+async def run_mock_source(producer: JsonKafkaProducer, interval_seconds: float) -> None:
+    logger.info("Starting Mock social post source")
+    keywords = ["ai", "crypto", "kubernetes", "rust", "python", "fastapi", "react", "postgres", "kafka", "spark"]
+    templates = [
+        "Just launched our new {keyword} platform! Highly recommend it.",
+        "Experiencing major latency and bugs with {keyword} today.",
+        "Learning {keyword} is the best decision I made this year.",
+        "Is anyone else seeing a sudden crash in {keyword} services?",
+        "Clean architecture is key when building {keyword} systems.",
+        "Honestly, {keyword} is extremely slow compared to the alternatives.",
+        "Incredible growth in the {keyword} ecosystem recently!",
+    ]
+
+    while True:
+        try:
+            keyword = random.choice(keywords)
+            template = random.choice(templates)
+            text = template.format(keyword=keyword)
+            event = {
+                "id": stable_id(f"mock_{keyword}"),
+                "source": "bluesky",
+                "author": f"user_{random.randint(100, 999)}",
+                "text": text,
+                "lang": "en",
+                "created_at": utc_now_iso(),
+                "url": None,
+                "metadata": {},
+            }
+            await producer.send(RAW_SOCIAL_TOPIC, event, key=event["id"])
+            logger.info("Mock social event sent for keyword: %s", keyword)
+        except Exception:
+            logger.exception("Mock source failed")
+        await asyncio.sleep(interval_seconds)
+
