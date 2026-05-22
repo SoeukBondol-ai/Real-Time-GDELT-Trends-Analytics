@@ -36,7 +36,7 @@ async def run_bluesky_source(producer: JsonKafkaProducer, url: str) -> None:
     logger.info("Starting Bluesky Jetstream source")
     while True:
         try:
-            async with websockets.connect(url, ping_interval=20, ping_timeout=20, max_size=2_000_000) as ws:
+            async with websockets.connect(url, ping_interval=30, ping_timeout=60, max_size=2_000_000, open_timeout=30) as ws:
                 async for message in ws:
                     try:
                         import json
@@ -76,6 +76,7 @@ async def run_gdelt_source(producer: JsonKafkaProducer, query: str, poll_seconds
     logger.info("Starting GDELT source")
     seen_urls: set[str] = set()
     endpoint = "https://api.gdeltproject.org/api/v2/doc/doc"
+    backoff = poll_seconds
 
     while True:
         try:
@@ -88,7 +89,13 @@ async def run_gdelt_source(producer: JsonKafkaProducer, query: str, poll_seconds
             }
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.get(endpoint, params=params)
+                if response.status_code == 429:
+                    logger.warning("GDELT rate limited, backing off %ds", backoff)
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 300)
+                    continue
                 response.raise_for_status()
+                backoff = poll_seconds  # reset on success
                 data: dict[str, Any] = response.json()
 
             for article in data.get("articles", []):
@@ -97,6 +104,9 @@ async def run_gdelt_source(producer: JsonKafkaProducer, query: str, poll_seconds
                 if not url or url in seen_urls or not title:
                     continue
                 seen_urls.add(url)
+                # keep set from growing forever
+                if len(seen_urls) > 5000:
+                    seen_urls.clear()
                 event = {
                     "id": stable_id(url),
                     "source": "gdelt",
@@ -120,46 +130,45 @@ async def run_gdelt_source(producer: JsonKafkaProducer, query: str, poll_seconds
 
 async def run_hackernews_source(producer: JsonKafkaProducer, poll_seconds: int) -> None:
     logger.info("Starting HackerNews source")
-    seen_ids: set[int] = set()
-    endpoint = "https://hacker-news.firebaseio.com/v0/topstories.json"
+    endpoint = "https://hacker-news.firebaseio.com/v0/newstories.json"
 
     while True:
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.get(endpoint)
                 response.raise_for_status()
-                story_ids = response.json()[:20]
+                story_ids = response.json()[:50]
 
-                for story_id in story_ids:
-                    if story_id in seen_ids:
-                        continue
+                async def fetch_and_send(story_id: int) -> None:
+                    try:
+                        item_url = f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
+                        item_response = await client.get(item_url)
+                        item_response.raise_for_status()
+                        story = item_response.json()
+                        title = story.get("title")
+                        url = story.get("url")
+                        if not title:
+                            return
+                        event = {
+                            "id": f"hn_{story_id}",
+                            "source": "hackernews",
+                            "author": story.get("by") or "hn",
+                            "text": title,
+                            "lang": "en",
+                            "created_at": utc_now_iso(),
+                            "url": url or f"https://news.ycombinator.com/item?id={story_id}",
+                            "metadata": {
+                                "score": story.get("score"),
+                                "descendants": story.get("descendants"),
+                            },
+                        }
+                        await producer.send(RAW_NEWS_TOPIC, event, key=event["id"])
+                        logger.info("HN event sent: %s", title[:120])
+                    except Exception:
+                        logger.exception("HN fetch failed for %d", story_id)
 
-                    item_url = f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
-                    item_response = await client.get(item_url)
-                    item_response.raise_for_status()
-                    story = item_response.json()
-
-                    title = story.get("title")
-                    url = story.get("url")
-                    if not title:
-                        continue
-
-                    seen_ids.add(story_id)
-                    event = {
-                        "id": f"hn_{story_id}",
-                        "source": "hackernews",
-                        "author": story.get("by") or "hn",
-                        "text": title,
-                        "lang": "en",
-                        "created_at": utc_now_iso(),
-                        "url": url or f"https://news.ycombinator.com/item?id={story_id}",
-                        "metadata": {
-                            "score": story.get("score"),
-                            "descendants": story.get("descendants"),
-                        },
-                    }
-                    await producer.send(RAW_NEWS_TOPIC, event, key=event["id"])
-                    logger.info("HN event sent: %s", title[:120])
+                # fetch top 20 concurrently every poll
+                await asyncio.gather(*[fetch_and_send(sid) for sid in story_ids[:20]])
 
         except Exception:
             logger.exception("HackerNews polling failed")

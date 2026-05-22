@@ -25,38 +25,33 @@ async def latest_trends(limit: int = 20) -> list[dict]:
 
     pool = get_pg_pool()
     query = """
-        WITH deduped AS (
-            SELECT *
-            FROM (
-                SELECT
-                    tw.*,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY window_start, window_end, keyword, source
-                        ORDER BY batch_id DESC, id DESC
-                    ) AS rn
-                FROM trend_windows tw
-            ) x
-            WHERE rn = 1
-        ), latest_window AS (
-            SELECT MAX(window_end) AS max_window_end
-            FROM deduped
-        ), ranked AS (
+        WITH per_source_max AS (
+            SELECT source, MAX(window_end) AS max_window_end
+            FROM trend_windows
+            GROUP BY source
+        ), recent AS (
             SELECT
-                keyword,
-                source,
-                SUM(mention_count)::BIGINT AS mention_count,
-                AVG(avg_sentiment)::DOUBLE PRECISION AS avg_sentiment,
-                SUM(trend_score)::DOUBLE PRECISION AS trend_score,
-                MIN(window_start) AS window_start,
-                MAX(window_end) AS window_end
-            FROM deduped
-            WHERE window_end >= COALESCE((SELECT max_window_end FROM latest_window) - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes')
-            GROUP BY keyword, source
+                tw.keyword,
+                tw.source,
+                SUM(tw.mention_count)::BIGINT AS mention_count,
+                AVG(tw.avg_sentiment)::DOUBLE PRECISION AS avg_sentiment,
+                SUM(tw.trend_score)::DOUBLE PRECISION AS trend_score,
+                MIN(tw.window_start) AS window_start,
+                MAX(tw.window_end) AS window_end
+            FROM trend_windows tw
+            JOIN per_source_max psm ON tw.source = psm.source
+            WHERE tw.window_end >= psm.max_window_end - INTERVAL '30 minutes'
+            GROUP BY tw.keyword, tw.source
+        ), source_ranked AS (
+            SELECT
+                *,
+                ROW_NUMBER() OVER (PARTITION BY source ORDER BY trend_score DESC, mention_count DESC) AS srn
+            FROM recent
         )
-        SELECT *
-        FROM ranked
-        ORDER BY trend_score DESC, mention_count DESC
-        LIMIT $1;
+        SELECT keyword, source, mention_count, avg_sentiment, trend_score, window_start, window_end
+        FROM source_ranked
+        WHERE srn <= $1
+        ORDER BY trend_score DESC, mention_count DESC;
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(query, limit)
@@ -85,7 +80,7 @@ async def trend_history(keyword: str, hours: int = 2) -> list[dict]:
             WHERE rn = 1
         )
         SELECT
-            time_bucket('1 minute', window_end) AS bucket,
+            time_bucket('10 seconds', window_end) AS bucket,
             keyword,
             source,
             SUM(mention_count)::BIGINT AS mention_count,
