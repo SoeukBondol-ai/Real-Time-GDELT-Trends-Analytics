@@ -165,7 +165,7 @@ def main() -> None:
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", kafka_bootstrap)
         .option("subscribe", "raw-social-posts,raw-news-events")
-        .option("startingOffsets", "latest")
+        .option("startingOffsets", "earliest")
         .option("failOnDataLoss", "false")
         .load()
     )
@@ -195,8 +195,8 @@ def main() -> None:
     )
 
     trends = (
-        exploded.withWatermark("event_time", "10 minutes")
-        .groupBy(window(col("event_time"), "1 minute"), col("keyword"), col("source"))
+        exploded.withWatermark("event_time", "1 minute")
+        .groupBy(window(col("event_time"), "10 seconds"), col("keyword"), col("source"))
         .agg(
             spark_sum(lit(1)).alias("mention_count"),
             avg(col("sentiment")).alias("avg_sentiment"),
@@ -204,24 +204,16 @@ def main() -> None:
         .withColumn("trend_score", col("mention_count") * (lit(1.0) + spark_abs(col("avg_sentiment"))))
     )
 
-    checkpoint_dir = "s3a://trends-raw/checkpoints/trends_v2"
+    checkpoint_dir = "s3a://trends-raw/checkpoints/trends_v5"
     trend_query = (
         trends.writeStream.outputMode("update")
+        .trigger(processingTime="2 seconds")
         .option("checkpointLocation", checkpoint_dir)
         .foreachBatch(foreach_batch_writer)
         .start()
     )
 
-    archive_query = (
-        parsed.select("id", "source", "author", "text", "lang", "created_at", "url", "event_time", "sentiment")
-        .writeStream.outputMode("append")
-        .format("json")
-        .option("path", f"s3a://{minio_bucket}/processed-events")
-        .option("checkpointLocation", "/opt/spark-apps/checkpoints/minio-archive")
-        .start()
-    )
-
-    spark.streams.awaitAnyTermination()
+    trend_query.awaitTermination()
 
 
 if __name__ == "__main__":

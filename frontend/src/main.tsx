@@ -37,10 +37,13 @@ function sentimentLabel(value: number): string {
   return "Neutral";
 }
 
+const SOURCES = ["all", "bluesky", "gdelt", "hackernews"];
+
 function App() {
   const [trends, setTrends] = useState<TrendItem[]>([]);
   const [status, setStatus] = useState("connecting");
   const [lastUpdate, setLastUpdate] = useState<string>("");
+  const [activeSource, setActiveSource] = useState("all");
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -83,18 +86,23 @@ function App() {
     };
   }, []);
 
+  const displayedTrends = useMemo(() => {
+    if (activeSource === "all") return trends;
+    return trends.filter(t => t.source === activeSource);
+  }, [trends, activeSource]);
+
   const chartData = useMemo(
     () =>
-      trends.slice(0, 15).map((item) => ({
+      displayedTrends.slice(0, 15).map((item) => ({
         name: item.keyword,
         score: Number(item.trend_score.toFixed(1)),
       })),
-    [trends]
+    [displayedTrends]
   );
 
-  const totalVolume = trends.reduce((sum, item) => sum + item.mention_count, 0);
-  const topKeyword = trends[0]?.keyword || "---";
-  const topSource = trends[0]?.source || "---";
+  const totalVolume = displayedTrends.reduce((sum, item) => sum + item.mention_count, 0);
+  const topKeyword = displayedTrends[0]?.keyword || "---";
+  const topSource = displayedTrends[0]?.source || "---";
 
   return (
     <main className="app">
@@ -103,7 +111,14 @@ function App() {
           <p className="eyebrow">Data Pipeline Analytics</p>
           <h1>Trends Explorer</h1>
         </div>
-        <div className="status-wrap">
+        <div className="status-wrap" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <select 
+            value={activeSource} 
+            onChange={(e) => setActiveSource(e.target.value)}
+            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d9dee7', backgroundColor: 'white', color: '#111827', fontSize: '13px', outline: 'none', cursor: 'pointer', fontWeight: 500 }}
+          >
+            {SOURCES.map(s => <option key={s} value={s}>{s === 'all' ? 'All Sources' : s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+          </select>
           <span className="badge">Kafka / Spark / Timescale</span>
           <div className="badge" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div className={`status-dot ${status}`} />
@@ -134,8 +149,8 @@ function App() {
       <section className="content-grid">
         <article className="panel">
           <div className="panel-header">
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <BarChart3 size={16} color="#0f766e" /> Trend Velocity
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'capitalize' }}>
+              <BarChart3 size={16} color="#0f766e" /> Trend Velocity ({activeSource})
             </h2>
           </div>
           <div className="panel-body">
@@ -177,8 +192,8 @@ function App() {
 
         <article className="panel">
           <div className="panel-header">
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <List size={16} color="#0f766e" /> Live Leaderboard
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'capitalize' }}>
+              <List size={16} color="#0f766e" /> Live Leaderboard ({activeSource})
             </h2>
           </div>
           <div className="table-wrap">
@@ -193,7 +208,7 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {trends.map((item) => (
+                {displayedTrends.slice(0, 20).map((item) => (
                   <tr key={`${item.keyword}-${item.source}`}>
                     <td className="keyword-cell">{item.keyword}</td>
                     <td><span className={`source-tag ${item.source}`}>{item.source}</span></td>

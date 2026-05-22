@@ -225,8 +225,9 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       PRODUCER_MODE: ${PRODUCER_MODE:-mock}
       MOCK_INTERVAL_SECONDS: ${MOCK_INTERVAL_SECONDS:-1.5}
-      GDELT_QUERY: ${GDELT_QUERY:-technology OR ai OR crypto OR climate OR election}
-      GDELT_POLL_SECONDS: ${GDELT_POLL_SECONDS:-60}
+      GDELT_QUERY: ${GDELT_QUERY:-(technology OR ai OR crypto OR climate OR election)}
+      GDELT_POLL_SECONDS: ${GDELT_POLL_SECONDS:-15}
+      HN_POLL_SECONDS: ${HN_POLL_SECONDS:-15}
       BLUESKY_JETSTREAM_URL: ${BLUESKY_JETSTREAM_URL:-wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post}
     depends_on:
       kafka-init:
