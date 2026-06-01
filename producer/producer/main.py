@@ -19,17 +19,32 @@ async def main() -> None:
 
     tasks: list[asyncio.Task] = []
     modes = {m.strip() for m in settings.producer_mode.lower().split(",")}
-    
 
     if "bluesky" in modes or "all" in modes:
-        tasks.append(asyncio.create_task(run_bluesky_source(producer, settings.bluesky_jetstream_url)))
+        tasks.append(
+            asyncio.create_task(
+                run_bluesky_source(producer, settings.bluesky_jetstream_url)
+            )
+        )
     if "gdelt" in modes or "all" in modes:
-        tasks.append(asyncio.create_task(run_gdelt_source(producer, settings.gdelt_query, settings.gdelt_poll_seconds)))
+        tasks.append(
+            asyncio.create_task(
+                run_gdelt_source(
+                    producer, settings.gdelt_query, settings.gdelt_poll_seconds
+                )
+            )
+        )
     if "hackernews" in modes or "all" in modes:
-        tasks.append(asyncio.create_task(run_hackernews_source(producer, settings.hn_poll_seconds)))
+        tasks.append(
+            asyncio.create_task(
+                run_hackernews_source(producer, settings.hn_poll_seconds)
+            )
+        )
 
     if not tasks:
-        raise ValueError(f"Unknown PRODUCER_MODE: {settings.producer_mode}. Use comma-separated values like 'bluesky,gdelt'")
+        raise ValueError(
+            f"Unknown PRODUCER_MODE: {settings.producer_mode}. Use comma-separated values like 'bluesky,gdelt'"
+        )
 
     stop_event = asyncio.Event()
 
@@ -50,7 +65,5 @@ async def main() -> None:
         await producer.stop()
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
 if __name__ == "__main__":
     asyncio.run(main())

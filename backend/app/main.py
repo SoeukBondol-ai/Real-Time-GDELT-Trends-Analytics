@@ -47,7 +47,9 @@ async def get_latest_trends(limit: int = Query(default=20, ge=1, le=100)) -> lis
 
 
 @app.get("/api/trends/history/{keyword}")
-async def get_trend_history(keyword: str, hours: int = Query(default=2, ge=1, le=72)) -> list[dict]:
+async def get_trend_history(
+    keyword: str, hours: int = Query(default=2, ge=1, le=72)
+) -> list[dict]:
     return await trend_history(keyword=keyword, hours=hours)
 
 

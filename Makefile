@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help copy-env up down restart logs ps topics backend frontend producer spark clean
+.PHONY: help copy-env up down restart logs ps topics backend frontend producer spark clean lint lint-fix devcontainer
 
 help:
 	@echo "Available commands:"
@@ -15,6 +15,9 @@ help:
 	@echo "  make frontend     Follow frontend logs"
 	@echo "  make producer     Follow producer logs"
 	@echo "  make spark        Follow Spark streaming logs"
+	@echo "  make lint         Run ruff linter checks"
+	@echo "  make lint-fix     Run ruff linter and fix issues"
+	@echo "  make devcontainer Start devcontainer service"
 	@echo "  make clean        Stop and remove volumes"
 
 copy-env:
@@ -52,6 +55,17 @@ producer:
 spark:
 	docker compose logs -f spark-trends
 
+lint:
+	uv run ruff check .
+	uv run ruff format --check .
+
+lint-fix:
+	uv run ruff check --fix .
+	uv run ruff format .
+
+devcontainer:
+	docker compose up -d devcontainer
+
 clean:
 	docker compose down -v
-	rm -rf logs data spark/checkpoints spark/warehouse
+	rm -rf logs data spark/checkpoints spark/warehouse .venv

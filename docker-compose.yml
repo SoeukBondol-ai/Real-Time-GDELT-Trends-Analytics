@@ -213,8 +213,7 @@ services:
     container_name: trends_producer
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      PRODUCER_MODE: ${PRODUCER_MODE:-mock}
-      MOCK_INTERVAL_SECONDS: ${MOCK_INTERVAL_SECONDS:-1.5}
+      PRODUCER_MODE: ${PRODUCER_MODE:-bluesky,hackernews,gdelt}
       GDELT_QUERY: ${GDELT_QUERY:-(technology OR ai OR crypto OR climate OR election)}
       GDELT_POLL_SECONDS: ${GDELT_POLL_SECONDS:-15}
       HN_POLL_SECONDS: ${HN_POLL_SECONDS:-15}
@@ -331,6 +330,26 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+
+  devcontainer:
+    image: mcr.microsoft.com/devcontainers/python:3.11
+    container_name: trends_devcontainer
+    command: sleep infinity
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://trends:trends@postgres:5432/trends_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     restart: unless-stopped
 
 volumes:

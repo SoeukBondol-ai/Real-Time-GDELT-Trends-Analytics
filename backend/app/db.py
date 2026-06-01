@@ -9,7 +9,9 @@ redis_client: Redis | None = None
 
 async def connect() -> None:
     global pg_pool, redis_client
-    pg_pool = await asyncpg.create_pool(dsn=settings.database_url, min_size=1, max_size=5)
+    pg_pool = await asyncpg.create_pool(
+        dsn=settings.database_url, min_size=1, max_size=5
+    )
     redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
 
 
