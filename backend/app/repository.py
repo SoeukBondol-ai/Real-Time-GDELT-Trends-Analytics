@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 
 from app.db import get_pg_pool, get_redis
 

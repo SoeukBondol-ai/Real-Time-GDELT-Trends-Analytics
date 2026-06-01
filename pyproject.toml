@@ -1,0 +1,35 @@
+[project]
+name = "realtime-twitter-trends"
+version = "0.1.0"
+description = "Real-time social trend analytics pipeline"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["backend", "producer", "airflow"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.5",
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["backend/app", "producer/producer", "airflow/dags", "spark/jobs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"spark/jobs/*" = ["UP006", "UP035", "UP045"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "producer"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

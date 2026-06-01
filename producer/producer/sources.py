@@ -1,7 +1,6 @@
 import asyncio
 import hashlib
 import logging
-import random
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -16,9 +15,28 @@ logger = logging.getLogger(__name__)
 RAW_SOCIAL_TOPIC = "raw-social-posts"
 RAW_NEWS_TOPIC = "raw-news-events"
 
-POSITIVE_WORDS = ["growth", "win", "strong", "good", "great", "fast", "launch", "gain", "improve"]
-NEGATIVE_WORDS = ["risk", "down", "bug", "slow", "bad", "loss", "crash", "fail", "issue"]
-
+POSITIVE_WORDS = [
+    "growth",
+    "win",
+    "strong",
+    "good",
+    "great",
+    "fast",
+    "launch",
+    "gain",
+    "improve",
+]
+NEGATIVE_WORDS = [
+    "risk",
+    "down",
+    "bug",
+    "slow",
+    "bad",
+    "loss",
+    "crash",
+    "fail",
+    "issue",
+]
 
 
 def utc_now_iso() -> str:
@@ -30,13 +48,17 @@ def stable_id(text: str) -> str:
     return hashlib.sha256(payload).hexdigest()[:24]
 
 
-
-
 async def run_bluesky_source(producer: JsonKafkaProducer, url: str) -> None:
     logger.info("Starting Bluesky Jetstream source")
     while True:
         try:
-            async with websockets.connect(url, ping_interval=30, ping_timeout=60, max_size=2_000_000, open_timeout=30) as ws:
+            async with websockets.connect(
+                url,
+                ping_interval=30,
+                ping_timeout=60,
+                max_size=2_000_000,
+                open_timeout=30,
+            ) as ws:
                 async for message in ws:
                     try:
                         import json
@@ -72,7 +94,9 @@ async def run_bluesky_source(producer: JsonKafkaProducer, url: str) -> None:
             await asyncio.sleep(10)
 
 
-async def run_gdelt_source(producer: JsonKafkaProducer, query: str, poll_seconds: int) -> None:
+async def run_gdelt_source(
+    producer: JsonKafkaProducer, query: str, poll_seconds: int
+) -> None:
     logger.info("Starting GDELT source")
     seen_urls: set[str] = set()
     endpoint = "https://api.gdeltproject.org/api/v2/doc/doc"
@@ -156,7 +180,8 @@ async def run_hackernews_source(producer: JsonKafkaProducer, poll_seconds: int) 
                             "text": title,
                             "lang": "en",
                             "created_at": utc_now_iso(),
-                            "url": url or f"https://news.ycombinator.com/item?id={story_id}",
+                            "url": url
+                            or f"https://news.ycombinator.com/item?id={story_id}",
                             "metadata": {
                                 "score": story.get("score"),
                                 "descendants": story.get("descendants"),
@@ -174,39 +199,3 @@ async def run_hackernews_source(producer: JsonKafkaProducer, poll_seconds: int) 
             logger.exception("HackerNews polling failed")
 
         await asyncio.sleep(poll_seconds)
-
-
-async def run_mock_source(producer: JsonKafkaProducer, interval_seconds: float) -> None:
-    logger.info("Starting Mock social post source")
-    keywords = ["ai", "crypto", "kubernetes", "rust", "python", "fastapi", "react", "postgres", "kafka", "spark"]
-    templates = [
-        "Just launched our new {keyword} platform! Highly recommend it.",
-        "Experiencing major latency and bugs with {keyword} today.",
-        "Learning {keyword} is the best decision I made this year.",
-        "Is anyone else seeing a sudden crash in {keyword} services?",
-        "Clean architecture is key when building {keyword} systems.",
-        "Honestly, {keyword} is extremely slow compared to the alternatives.",
-        "Incredible growth in the {keyword} ecosystem recently!",
-    ]
-
-    while True:
-        try:
-            keyword = random.choice(keywords)
-            template = random.choice(templates)
-            text = template.format(keyword=keyword)
-            event = {
-                "id": stable_id(f"mock_{keyword}"),
-                "source": "bluesky",
-                "author": f"user_{random.randint(100, 999)}",
-                "text": text,
-                "lang": "en",
-                "created_at": utc_now_iso(),
-                "url": None,
-                "metadata": {},
-            }
-            await producer.send(RAW_SOCIAL_TOPIC, event, key=event["id"])
-            logger.info("Mock social event sent for keyword: %s", keyword)
-        except Exception:
-            logger.exception("Mock source failed")
-        await asyncio.sleep(interval_seconds)
-

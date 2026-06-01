@@ -1,11 +1,12 @@
 import os
 import re
-from typing import Iterable, Optional, List
+from typing import List, Optional
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     abs as spark_abs,
-    array,
+)
+from pyspark.sql.functions import (
     avg,
     coalesce,
     col,
@@ -15,44 +16,213 @@ from pyspark.sql.functions import (
     lit,
     regexp_replace,
     struct,
-    sum as spark_sum,
     to_json,
     to_timestamp,
     udf,
     window,
 )
+from pyspark.sql.functions import (
+    sum as spark_sum,
+)
 from pyspark.sql.types import ArrayType, DoubleType, StringType, StructField, StructType
 
 STOP_WORDS = {
-    "a", "about", "after", "all", "also", "an", "and", "are", "as", "at", "be", "because",
-    "but", "by", "can", "for", "from", "has", "have", "i", "if", "in", "is", "it", "its",
-    "new", "no", "not", "of", "on", "or", "our", "that", "the", "their", "this", "to", "today",
-    "was", "we", "with", "you", "your", "will", "http", "https", "rt", "get", "got", "just",
-    "like", "make", "know", "think", "see", "one", "good", "great", "well", "more", "much",
-    "even", "now", "still", "time", "day", "way", "people", "would", "could", "should",
-    "want", "need", "take", "give", "back", "come", "done", "real", "post", "social",
-    "media", "really", "actually", "going", "been", "being", "they", "them", "these", "those",
+    "a",
+    "about",
+    "after",
+    "all",
+    "also",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "because",
+    "but",
+    "by",
+    "can",
+    "for",
+    "from",
+    "has",
+    "have",
+    "i",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "new",
+    "no",
+    "not",
+    "of",
+    "on",
+    "only",
+    "or",
+    "our",
+    "over",
+    "than",
+    "that",
+    "the",
+    "their",
+    "there",
+    "this",
+    "to",
+    "today",
+    "was",
+    "we",
+    "what",
+    "when",
+    "which",
+    "with",
+    "you",
+    "your",
+    "will",
+    "http",
+    "https",
+    "rt",
+    "get",
+    "got",
+    "just",
+    "like",
+    "make",
+    "know",
+    "think",
+    "see",
+    "one",
+    "good",
+    "great",
+    "well",
+    "more",
+    "much",
+    "even",
+    "now",
+    "some",
+    "still",
+    "time",
+    "day",
+    "way",
+    "people",
+    "would",
+    "could",
+    "should",
+    "want",
+    "need",
+    "take",
+    "give",
+    "back",
+    "come",
+    "done",
+    "real",
+    "post",
+    "social",
+    "media",
+    "really",
+    "actually",
+    "going",
+    "been",
+    "being",
+    "they",
+    "them",
+    "these",
+    "those",
+    # URL / domain fragments that leak through tokenization
+    "com",
+    "org",
+    "net",
+    "edu",
+    "gov",
+    "mil",
+    "io",
+    "co",
+    "uk",
+    "us",
+    "au",
+    "ca",
+    "de",
+    "fr",
+    "www",
+    "html",
+    "htm",
+    "php",
+    "asp",
+    "json",
+    "xml",
+    "pdf",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "css",
+    "js",
+    "svg",
+    "amp",
+    "via",
+    "says",
+    "said",
+    "according",
 }
 
 POSITIVE = {
-    "good", "great", "growth", "gain", "gains", "improve", "improved", "strong", "win", "wins",
-    "launch", "fast", "success", "positive", "best", "safe", "secure", "stable",
+    "good",
+    "great",
+    "growth",
+    "gain",
+    "gains",
+    "improve",
+    "improved",
+    "strong",
+    "win",
+    "wins",
+    "launch",
+    "fast",
+    "success",
+    "positive",
+    "best",
+    "safe",
+    "secure",
+    "stable",
 }
 NEGATIVE = {
-    "bad", "bug", "bugs", "crash", "down", "fail", "failed", "issue", "issues", "loss", "risk",
-    "slow", "negative", "worse", "worst", "attack", "outage", "error",
+    "bad",
+    "bug",
+    "bugs",
+    "crash",
+    "down",
+    "fail",
+    "failed",
+    "issue",
+    "issues",
+    "loss",
+    "risk",
+    "slow",
+    "negative",
+    "worse",
+    "worst",
+    "attack",
+    "outage",
+    "error",
 }
 
 
 def tokenize(text: Optional[str]) -> List[str]:
     if not text:
         return []
-    cleaned = re.sub(r"https?://\S+", " ", text.lower())
-    tokens = re.findall(r"#?[a-z][a-z0-9_]{2,}", cleaned)
-    result: list[str] = []
+    cleaned = text.lower()
+    # Strip full URLs (http/https)
+    cleaned = re.sub(r"https?://\S+", " ", cleaned)
+    # Strip bare domain patterns like reuters.com, bsky.app, news.site.co.uk
+    cleaned = re.sub(r"\b[\w-]+\.[\w.-]+\b", " ", cleaned)
+    # Strip email-like fragments
+    cleaned = re.sub(r"\b[\w.-]+@[\w.-]+\b", " ", cleaned)
+    # Strip remaining bare TLDs
+    cleaned = re.sub(r"\b(?:com|org|net|edu|gov|io|co|uk|us|au|ca|de|fr|info|biz|me|tv)\b", " ", cleaned)
+    tokens = re.findall(r"#?[a-z][a-z0-9_]{3,}", cleaned)
+    result: List[str] = []
     for token in tokens:
         token = token.lstrip("#")
-        if token not in STOP_WORDS and len(token) >= 3:
+        if token not in STOP_WORDS and len(token) >= 4:
             result.append(token)
     return result[:20]
 
@@ -83,20 +253,17 @@ def foreach_batch_writer(batch_df, batch_id: int) -> None:
     postgres_password = env("POSTGRES_PASSWORD", "trends")
     kafka_bootstrap = env("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 
-    flattened = (
-        batch_df.select(
-            lit(batch_id).alias("batch_id"),
-            col("window.start").alias("window_start"),
-            col("window.end").alias("window_end"),
-            col("keyword"),
-            col("source"),
-            col("mention_count"),
-            col("avg_sentiment"),
-            col("trend_score"),
-            current_timestamp().alias("created_at"),
-        )
-        .filter(col("keyword").isNotNull())
-    )
+    flattened = batch_df.select(
+        lit(batch_id).alias("batch_id"),
+        col("window.start").alias("window_start"),
+        col("window.end").alias("window_end"),
+        col("keyword"),
+        col("source"),
+        col("mention_count"),
+        col("avg_sentiment"),
+        col("trend_score"),
+        current_timestamp().alias("created_at"),
+    ).filter(col("keyword").isNotNull())
 
     flattened.write.format("jdbc").option("url", jdbc_url).option("dbtable", "trend_windows").option(
         "user", postgres_user
@@ -147,7 +314,6 @@ def main() -> None:
     spark.sparkContext.setLogLevel("WARN")
 
     kafka_bootstrap = env("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
-    minio_bucket = env("MINIO_BUCKET", "trends-raw")
 
     schema = StructType(
         [
