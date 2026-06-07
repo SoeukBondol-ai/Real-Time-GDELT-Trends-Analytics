@@ -13,4 +13,4 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 COPY --from=uv /uv /usr/local/bin/uv
 
 USER airflow
-RUN pip install --no-cache-dir apache-airflow-providers-apache-spark==4.11.3 psycopg2-binary==2.9.9 toml
+RUN pip install --no-cache-dir apache-airflow-providers-apache-spark==4.11.3 apache-airflow-providers-postgres toml

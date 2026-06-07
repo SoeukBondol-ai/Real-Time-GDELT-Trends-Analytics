@@ -8,8 +8,8 @@ COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 
 COPY pyproject.toml README.md ./
-COPY producer ./producer
+COPY app ./app
 
 RUN uv pip install --system --no-cache .
 
-CMD ["python", "-m", "producer.main"]
+CMD ["python", "-m", "app.main"]

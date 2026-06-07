@@ -2,9 +2,9 @@ import asyncio
 import logging
 import signal
 
-from producer.config import settings
-from producer.kafka_client import JsonKafkaProducer
-from producer.sources import run_bluesky_source, run_gdelt_source, run_hackernews_source
+from app.config import settings
+from app.kafka_client import JsonKafkaProducer
+from app.sources import run_bluesky_source, run_gdelt_source, run_hackernews_source
 
 logging.basicConfig(
     level=logging.INFO,

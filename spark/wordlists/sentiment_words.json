@@ -1,0 +1,35 @@
+{
+  "stop_words": [
+    "a", "about", "after", "all", "also", "an", "and", "are", "as", "at",
+    "be", "because", "but", "by", "can", "for", "from", "has", "have",
+    "i", "if", "in", "into", "is", "it", "its", "new", "no", "not",
+    "of", "on", "only", "or", "our", "over", "than", "that", "the",
+    "their", "there", "this", "to", "today", "was", "we", "what", "when",
+    "which", "with", "you", "your", "will",
+
+    "http", "https", "rt", "get", "got", "just", "like", "make", "know",
+    "think", "see", "one", "good", "great", "well", "more", "much",
+    "even", "now", "some", "still", "time", "day", "way", "people",
+    "would", "could", "should", "want", "need", "take", "give", "back",
+    "come", "done", "real", "post", "social", "media", "really",
+    "actually", "going", "been", "being", "they", "them", "these",
+    "those",
+
+    "com", "org", "net", "edu", "gov", "mil", "io", "co", "uk", "us",
+    "au", "ca", "de", "fr", "www", "html", "htm", "php", "asp", "json",
+    "xml", "pdf", "png", "jpg", "jpeg", "gif", "css", "js", "svg", "amp",
+    "via", "says", "said", "according"
+  ],
+
+  "positive": [
+    "good", "great", "growth", "gain", "gains", "improve", "improved",
+    "strong", "win", "wins", "launch", "fast", "success", "positive",
+    "best", "safe", "secure", "stable"
+  ],
+
+  "negative": [
+    "bad", "bug", "bugs", "crash", "down", "fail", "failed", "issue",
+    "issues", "loss", "risk", "slow", "negative", "worse", "worst",
+    "attack", "outage", "error"
+  ]
+}

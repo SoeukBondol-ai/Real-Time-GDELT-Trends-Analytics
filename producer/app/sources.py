@@ -8,35 +8,12 @@ from typing import Any
 import httpx
 import websockets
 
-from producer.kafka_client import JsonKafkaProducer
+from app.kafka_client import JsonKafkaProducer
 
 logger = logging.getLogger(__name__)
 
 RAW_SOCIAL_TOPIC = "raw-social-posts"
 RAW_NEWS_TOPIC = "raw-news-events"
-
-POSITIVE_WORDS = [
-    "growth",
-    "win",
-    "strong",
-    "good",
-    "great",
-    "fast",
-    "launch",
-    "gain",
-    "improve",
-]
-NEGATIVE_WORDS = [
-    "risk",
-    "down",
-    "bug",
-    "slow",
-    "bad",
-    "loss",
-    "crash",
-    "fail",
-    "issue",
-]
 
 
 def utc_now_iso() -> str:

@@ -275,6 +275,13 @@ services:
           --lastname Engineer \
           --role Admin \
           --email admin@example.com || true
+        airflow connections add trends_db \
+          --conn-type postgres \
+          --conn-host $${TRENDS_DB_HOST:-postgres} \
+          --conn-port $${TRENDS_DB_PORT:-5432} \
+          --conn-login $${TRENDS_DB_USER:-trends} \
+          --conn-password $${TRENDS_DB_PASSWORD:-trends} \
+          --conn-schema $${TRENDS_DB_NAME:-trends_db} || true
     environment:
       <<: *airflow-common-env
       _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
