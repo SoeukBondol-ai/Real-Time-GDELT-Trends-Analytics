@@ -20,6 +20,48 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def sanitize_timestamp(ts: str | None, max_age_days: int = 365) -> str:
+    """Validate a timestamp string. Returns it if it's recent (within max_age_days),
+    otherwise returns the current time. Prevents ancient or far-future timestamps
+    from breaking Spark's watermarking."""
+    if not ts:
+        return utc_now_iso()
+    ts = ts.strip()
+    try:
+        # Handle both ISO 8601 and GDELT formats
+        if "-" in ts and ":" in ts:
+            # ISO 8601: 2026-06-07T05:01:43.144321+00:00 or 2026-06-07T05:01:43Z
+            parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        else:
+            # Might be GDELT format, try normalize_gdelt_date first
+            parsed = datetime.fromisoformat(
+                normalize_gdelt_date(ts).replace("Z", "+00:00")
+            )
+        # Check if timestamp is reasonably recent
+        now = datetime.now(timezone.utc)
+        age = abs((now - parsed).total_seconds())
+        if age > max_age_days * 86400:  # Too old or too far in the future
+            return utc_now_iso()
+        return ts
+    except (ValueError, IndexError):
+        return utc_now_iso()
+
+
+def normalize_gdelt_date(raw: str | None) -> str:
+    """Convert GDELT seendate like '20260607T044500Z' to ISO 8601 '2026-06-07T04:45:00Z'."""
+    if not raw:
+        return utc_now_iso()
+    raw = raw.strip()
+    # Already looks like ISO 8601 with hyphens/colons
+    if "-" in raw and ":" in raw:
+        return raw
+    try:
+        # GDELT format: YYYYMMDDTHHMMSSz  (e.g. 20260607T044500Z)
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}T{raw[9:11]}:{raw[11:13]}:{raw[13:15]}Z"
+    except (IndexError, ValueError):
+        return utc_now_iso()
+
+
 def stable_id(text: str) -> str:
     payload = f"{text}-{time.time_ns()}".encode("utf-8")
     return hashlib.sha256(payload).hexdigest()[:24]
@@ -52,7 +94,7 @@ async def run_bluesky_source(producer: JsonKafkaProducer, url: str) -> None:
                             continue
 
                         did = payload.get("did", "unknown")
-                        created_at = record.get("createdAt") or utc_now_iso()
+                        created_at = sanitize_timestamp(record.get("createdAt"))
                         event = {
                             "id": stable_id(f"{did}-{created_at}-{text}"),
                             "source": "bluesky",
@@ -75,9 +117,10 @@ async def run_gdelt_source(
     producer: JsonKafkaProducer, query: str, poll_seconds: int
 ) -> None:
     logger.info("Starting GDELT source")
-    seen_urls: set[str] = set()
+    seen_urls: dict[str, float] = {}  # url -> timestamp for bounded dedup
     endpoint = "https://api.gdeltproject.org/api/v2/doc/doc"
     backoff = poll_seconds
+    max_dedup = 10_000
 
     while True:
         try:
@@ -99,22 +142,26 @@ async def run_gdelt_source(
                 backoff = poll_seconds  # reset on success
                 data: dict[str, Any] = response.json()
 
-            for article in data.get("articles", []):
+            articles = data.get("articles", [])
+            logger.info("GDELT returned %d articles (seen: %d)", len(articles), len(seen_urls))
+            for article in articles:
                 url = article.get("url")
                 title = article.get("title") or ""
                 if not url or url in seen_urls or not title:
                     continue
-                seen_urls.add(url)
-                # keep set from growing forever
-                if len(seen_urls) > 5000:
-                    seen_urls.clear()
+                seen_urls[url] = time.time()
+                # Evict oldest entries to keep set bounded
+                if len(seen_urls) > max_dedup:
+                    oldest = sorted(seen_urls, key=seen_urls.get)[: len(seen_urls) // 2]
+                    for k in oldest:
+                        del seen_urls[k]
                 event = {
                     "id": stable_id(url),
                     "source": "gdelt",
                     "author": article.get("domain") or "gdelt",
                     "text": title,
                     "lang": article.get("language") or "unknown",
-                    "created_at": article.get("seendate") or utc_now_iso(),
+                    "created_at": normalize_gdelt_date(article.get("seendate")),
                     "url": url,
                     "metadata": {
                         "domain": article.get("domain"),
@@ -125,6 +172,7 @@ async def run_gdelt_source(
                 logger.info("gdelt event sent: %s", title[:120])
         except Exception:
             logger.exception("GDELT polling failed")
+            backoff = min(backoff * 2, 300)
 
         await asyncio.sleep(poll_seconds)
 

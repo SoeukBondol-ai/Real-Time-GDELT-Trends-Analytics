@@ -86,7 +86,7 @@ with DAG(
     dag_id="daily_trend_summary",
     description="Build daily summary rows from real-time trend windows",
     start_date=datetime(2024, 1, 1),
-    schedule_interval="15 0 * * *",
+    schedule="15 0 * * *",
     catchup=False,
     default_args={"retries": 1, "retry_delay": timedelta(minutes=5)},
     tags=["trends", "summary"],
