@@ -282,6 +282,8 @@ services:
           --conn-login $${TRENDS_DB_USER:-trends} \
           --conn-password $${TRENDS_DB_PASSWORD:-trends} \
           --conn-schema $${TRENDS_DB_NAME:-trends_db} || true
+        airflow dags reserialize
+        airflow dags unpause daily_trend_summary
     environment:
       <<: *airflow-common-env
       _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}

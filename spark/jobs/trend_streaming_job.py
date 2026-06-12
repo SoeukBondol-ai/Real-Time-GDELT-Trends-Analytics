@@ -144,6 +144,7 @@ def build_spark() -> SparkSession:
     return (
         SparkSession.builder.appName("real-time-twitter-trends")
         .config("spark.sql.shuffle.partitions", "4")
+        .config("spark.sql.session.timeZone", "UTC")
         .config("spark.hadoop.fs.s3a.endpoint", minio_endpoint)
         .config("spark.hadoop.fs.s3a.access.key", minio_access_key)
         .config("spark.hadoop.fs.s3a.secret.key", minio_secret_key)
@@ -185,8 +186,8 @@ def main() -> None:
         raw.selectExpr("CAST(value AS STRING) AS json_value")
         .select(from_json(col("json_value"), schema).alias("event"))
         .select("event.*")
-        .withColumn("created_at_clean", regexp_replace(col("created_at"), "Z$", ""))
-        .withColumn("event_time", coalesce(to_timestamp(col("created_at_clean")), current_timestamp()))
+        .withColumn("created_at_utc", regexp_replace(col("created_at"), "Z$", "+00:00"))
+        .withColumn("event_time", coalesce(to_timestamp(col("created_at_utc")), current_timestamp()))
         .withColumn("source", coalesce(col("source"), lit("unknown")))
         .withColumn("sentiment", sentiment_udf(col("text")))
         .withColumn("keywords", keywords_udf(col("text")))
@@ -215,7 +216,7 @@ def main() -> None:
         .withColumn("trend_score", col("mention_count") * (lit(1.0) + spark_abs(col("avg_sentiment"))))
     )
 
-    checkpoint_dir = "s3a://trends-raw/checkpoints/trends_v5"
+    checkpoint_dir = "s3a://trends-raw/checkpoints/trends_v6"
     trend_query = (
         trends.writeStream.outputMode("update")
         .trigger(processingTime="2 seconds")
